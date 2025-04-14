@@ -236,7 +236,7 @@ void run_server() {
                 // wait for a client to connect
                 int num_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
                 if (num_events == -1) {
-                        perror("epoll_wait");
+                        perror("error with epoll_wait");
                         close(server_fd);
                         close(epoll_fd);
                         exit(EXIT_FAILURE);
@@ -248,7 +248,7 @@ void run_server() {
                                  // Receive data from a client
                                  int n = recvfrom(server_fd, recv_buf, MESSAGE_SIZE, 0, (struct sockaddr *)&client_addr, &client_len);
                                  if (n <= 0) {
-                                         perror("recvfrom");
+                                         perror("error with recvfrom");
                                  } else {
                                          // Echo the data back to the client
                                          if (sendto(server_fd, recv_buf, n, 0, (struct sockaddr *)&client_addr, client_len) == -1) {
