@@ -6,18 +6,19 @@
 #include <arpa/inet.h>
 #include <sys/epoll.h>
 #include <sys/timerfd.h>
+#include <time.h>
+#include <sys/time.h>
 
 #include "PA2-task2.h"
 
 #define DEFAULT_CLIENT_THREADS 4
 #define NUM_REQUESTS 1000
+#define TIMEOUT_MS 100
 
 const char *server_ip = "127.0.0.1";
 int server_port = 12345;
 int num_client_threads = DEFAULT_CLIENT_THREADS;
 int num_requests = NUM_REQUESTS;
-
-int timer_fd;
 
 /* Protocol 3 (par) allows unidirectional data flow over an unreliable channel. */
 
@@ -31,15 +32,12 @@ void from_physical_layer(context_t *ctx, frame *r)
     recvfrom(ctx->socket_fd, r, sizeof(frame), 0, (struct sockaddr *)&ctx->server_addr, &ctx->addr_len);
 }
 
-void wait_for_event(context_t *ctx, event_type *event)
-{
+void wait_for_event(context_t *ctx, event_type *event, int timeout_ms) {
     struct epoll_event events[MAX_EVENTS];
-    int ret = epoll_wait(ctx->epoll_fd, events, MAX_EVENTS, 100);
-    if (ret == 0)
-    {
+    int ret = epoll_wait(ctx->epoll_fd, events, MAX_EVENTS, timeout_ms);
+    if (ret == 0) {
         *event = timeout;
-    }
-    else if (ret > 0) {
+    } else if (ret > 0) {
         *event = frame_arrival;
     } else {
         perror("epoll_wait");
@@ -47,27 +45,7 @@ void wait_for_event(context_t *ctx, event_type *event)
     }
 }
 
-void start_timer(context_t *ctx, seq_nr seq) 
-{
-    struct itimerspec timer;
-    timer.it_value.tv_sec = 0;
-    timer.it_value.tv_nsec = 100 * 1000000; // 100ms
-    timer.it_interval.tv_sec = 0;
-    timer.it_interval.tv_nsec = 0;
-
-    timer_fd = timerfd_create(CLOCK_MONOTONIC, 0);
-    struct epoll_event ev = { .events = EPOLLIN, .data.fd = timer_fd };
-    epoll_ctl(ctx->epoll_fd, EPOLL_CTL_ADD, timer_fd, &ev);
-    timerfd_settime(timer_fd, 0, &timer, NULL);
-}
-
-void stop_timer(context_t *ctx, seq_nr seq) 
-{
-    epoll_ctl(ctx->epoll_fd, EPOLL_CTL_DEL, timer_fd, NULL);
-    close(timer_fd);
-}
-
-void sender3(context_t *ctx, long long *tx_cnt, long long *rx_cnt) {
+void sender3(context_t *ctx, long long *tx_cnt, long long *rx_cnt, long long *total_rtt) {
     seq_nr next_frame_to_send = 0;
     frame s, r;
     packet buffer;
@@ -85,28 +63,34 @@ void sender3(context_t *ctx, long long *tx_cnt, long long *rx_cnt) {
 
         to_physical_layer(ctx, &s);
         (*tx_cnt)++;
-        start_timer(ctx, s.seq);
+        
+        struct timeval send_time;
+        gettimeofday(&send_time, NULL);
 
         while (1) {
-            wait_for_event(ctx, &event);
+            wait_for_event(ctx, &event, TIMEOUT_MS);
 
             if (event == frame_arrival) {
                 from_physical_layer(ctx, &r);
                 if (r.ack == next_frame_to_send && r.client_id == ctx->client_id) {
-                    stop_timer(ctx, s.seq);
+                    struct timeval recv_time;
+                    gettimeofday(&recv_time, NULL);
+
+                    long long rtt = (recv_time.tv_sec - send_time.tv_sec) * 1000000LL +
+                                    (recv_time.tv_usec - send_time.tv_usec);
+                    *total_rtt += rtt;
+
                     (*rx_cnt)++;
                     inc(next_frame_to_send);
                     break; // Next packet
                 }
             } else if (event == timeout) {
                 printf("[Client %d] Timeout, retransmitting frame %d\n", ctx->client_id, next_frame_to_send);
-                to_physical_layer(ctx, &s); // retransmit, no tx_cnt++
-                start_timer(ctx, s.seq);
+                to_physical_layer(ctx, &s); // retransmit, don't increment tx count
+                gettimeofday(&send_time, NULL); // reset timer
             }
         }
     }
-
-    close(timer_fd); // clean up
 }
 
 void receiver3(context_t *ctx) {
@@ -115,7 +99,7 @@ void receiver3(context_t *ctx) {
     event_type event;
 
     while (1) {
-        wait_for_event(ctx, &event);
+        wait_for_event(ctx, &event, -1);
 
         if (event == frame_arrival) {
             from_physical_layer(ctx, &r);
@@ -141,6 +125,7 @@ typedef struct
     int socket_fd;
     int epoll_fd;
     struct sockaddr_in server_addr;
+    socklen_t addr_len;
 } client_thread_data_t;
 
 void *client_thread_func(void *arg) {
@@ -154,11 +139,11 @@ void *client_thread_func(void *arg) {
         .client_id = data->client_id
     };
 
-    long long tx_cnt = 0, rx_cnt = 0;
+    long long tx_cnt = 0, rx_cnt = 0, total_rtt = 0;
 
-    sender3(&ctx, &tx_cnt, &rx_cnt);
+    sender3(&ctx, &tx_cnt, &rx_cnt, &total_rtt);
 
-    printf("[Client %d] Finished. tx_cnt = %lld, rx_cnt = %lld\n", data->client_id, tx_cnt, rx_cnt);
+    printf("[Client %d] Finished. tx_cnt = %lld, rx_cnt = %lld, Avg RTT = %lld us\n", data->client_id, tx_cnt, rx_cnt, total_rtt / rx_cnt);
 
     close(data->socket_fd);
     close(data->epoll_fd);
