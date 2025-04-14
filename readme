@@ -1,0 +1,4 @@
+run with following commands 
+gcc -o task1 task1.c -pthread
+./task1 server 127.0.0.1 12345
+./task1 client 127.0.0.1 12345 500 10
