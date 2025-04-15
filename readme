@@ -1,4 +1,18 @@
 run with following commands 
 gcc -o task1 task1.c -pthread
 ./task1 server 127.0.0.1 12345
+./task1 client 127.0.0.1 12345 10 10
+//for normal ^^
 ./task1 client 127.0.0.1 12345 500 10
+//for overload ^^
+
+With that many clients it should display some packets lost
+
+gcc -o task2 task2.c -pthread
+./task2 server 127.0.0.1 12345
+./task2 client 127.0.0.1 12345 10 10
+//for normal ^^
+./task2 client 127.0.0.1 12345 500 10
+//for overload ^^
+
+Then you can see when ran with this command all of the packets sent are all the packets recieved 
