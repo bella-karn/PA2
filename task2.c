@@ -39,7 +39,7 @@
 #define MAX_PACKET 4 //Max packet size
 #define MAX_SEQUENCE 1 //Max sequence number
 
-#define incre(k) ((k) = ((k) + 1) % (MAX_SEQUENCE+1)) //Increment sequence so the number is only 0 or 1
+#define incre(x) ((x) = ((x) + 1) % (MAX_SEQUENCE+1)) //Increment sequence so the number is only 0 or 1
 //number = (number + 1) % 2; since MAX_SEQ is already 1 it flips between 0 and 1
 char *server_ip = "127.0.0.1";
 int server_port = 12345;
@@ -120,6 +120,7 @@ void *client_thread_func(void *arg) {
 			int wait_return = epoll_wait(data->epoll_fd, events, MAX_EVENTS, 100); // 100ms timeout
 			if (wait_return == 0) {
 				// Timeout occurred
+				// When timeout occurs, the frame is retransmitted
 				fprintf(stderr, "Timeout\n");
 				continue;
 			} else if (wait_return == -1) {
@@ -316,7 +317,7 @@ void run_server() {
 						 if (sendto(server_fd, send_buf, sizeof(frame_type), 0, (struct sockaddr *)&client_addr, client_len) == -1) {
 							 perror("error with sendto");
 						 }
-						 inc(frame_expected[recv->client_id]); //increment the sequence number
+						 incre(frame_expected[recv->client_id]); //increment the sequence number
 					 }
 					 //allow all packets
 					 else if (recv->frame_kind == p && recv->sequence != frame_expected[recv->client_id]) 
