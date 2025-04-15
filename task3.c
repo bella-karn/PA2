@@ -98,7 +98,7 @@ void *client_thread_func(void *arg) {
 	    int j = 0;
 	    while (j < num_requests) {
 		    // Send message to the serve
-		    snprintf(send->info,MAX_PACKET, "ABC"); //
+		    snprintf(send->info,MAX_PACKET, "ABC"); // 4 bytes instead of 16
 		    send->frame_kind = p;
 		    send->sequence = next_frame_to_send;
 		    send->client_id = data->client_id;
