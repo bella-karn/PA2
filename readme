@@ -1,5 +1,5 @@
 *** Group member 1: Gavin Catron ***
-*** Group member 2: Gavin Catron ***
+*** Group member 2: Bella Karn ***
 
 run with following commands 
 gcc -o task1 task1.c -pthread
