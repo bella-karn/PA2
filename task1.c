@@ -167,6 +167,8 @@ void run_client() {
         long total_messages = 0;
         float total_request_rate = 0.0;
         long long lost_cnt = 0;
+        long long total_send_cnt = 0;
+        long long total_recv_cnt = 0;
         for (int i = 0; i < num_client_threads; i++) {
                 // Wait for the thread to complete
                 pthread_join(threads[i], NULL);
@@ -175,6 +177,8 @@ void run_client() {
                 total_messages += thread_data[i].total_messages;
                 total_request_rate += thread_data[i].request_rate;
                 lost_cnt += thread_data[i].send_cnt - thread_data[i].recv_cnt;
+                total_send_cnt += thread_data[i].send_cnt;
+		total_recv_cnt += thread_data[i].recv_cnt;
 
                 // Close the epoll file descriptor
                 close(thread_data[i].epoll_fd);
@@ -182,6 +186,8 @@ void run_client() {
 
         printf("Average RTT: %lld us\n", total_rtt / total_messages);
         printf("Total Request Rate: %f messages/s\n", total_request_rate);
+        printf("Total Packets Sent: %lld messages\n", total_send_cnt);
+	printf("Total Packets Recieved: %lld messages\n", total_recv_cnt);
         printf("Total Packets Lost: %lld messages\n", lost_cnt);
 }
 
@@ -196,7 +202,7 @@ void run_server() {
         // Create a UDP socket
         server_fd = socket(AF_INET, SOCK_DGRAM, 0);
         if (server_fd == -1) {
-                perror("socket");
+                perror("error with creating a socket");
                 exit(EXIT_FAILURE);
         }
 
